@@ -28,7 +28,7 @@
 -export([init/1, init/2, parse_with_character/2, end_parsing/1]).
 
 -record(pstate, {
-    state, % ready, in_quotes, skip_to_delimiter, eof
+    state, % ready, in_quotes, close_quote, skip_to_delimiter, eof
     current_line,
     current_value,
     opts,
@@ -36,9 +36,10 @@
     process_fun_state
 }).
 
-% 4 states:
+% 5 states:
 %   ready
 %   in_quotes
+%   close_quote
 %   skip_to_delimiter
 %   eof
 
@@ -74,6 +75,8 @@ parse_with(Input, #pstate{state=State}=PState) ->
             do_ready(Input, PState);
         in_quotes ->
             do_in_quotes(Input, PState);
+        close_quote ->
+            do_close_quote(Input, PState);
         skip_to_delimiter ->
             do_skip_to_delimiter(Input, PState);
         eof ->
@@ -158,13 +161,63 @@ do_in_quotes(
                 process_fun_state=UpdatedProcessingFunState1
             };
         {char, Char} when Char == $" ->
+            PState#pstate{state=close_quote};
+        {char, Char} ->
+            PState#pstate{current_value=[Char | CurrentValue]}
+    end.
+
+do_close_quote(
+    Input,
+    #pstate{
+        opts=Opts,
+        current_line=CurrentLine,
+        current_value=CurrentValue,
+        process_fun=ProcessingFun,
+        process_fun_state=ProcessingFunState
+    }=PState
+    ) ->
+    Delimiter = Opts#ecsv_opts.delimiter,
+    case Input of
+        {eof} ->
+            NewLine = lists:reverse([lists:reverse(CurrentValue) | CurrentLine]),
+            UpdatedProcessingFunState =
+                process_new_line(ProcessingFun, NewLine, ProcessingFunState),
+            UpdatedProcessingFunState1 =
+                ProcessingFun({eof}, UpdatedProcessingFunState),
+            PState#pstate{
+                state=eof,
+                current_line=[],
+                current_value=[],
+                process_fun_state=UpdatedProcessingFunState1
+            };
+        {char, Char} when Char == $"->
+            PState#pstate{
+                state=in_quotes,
+                current_value=[Char | CurrentValue]
+            };
+        {char, Char} when Char == Delimiter ->
+            PState#pstate{
+                state=ready,
+                current_line=[lists:reverse(CurrentValue) | CurrentLine],
+                current_value=[]
+            };
+        {char, Char} when Char == $\n ->
+            % a new line has been parsed: time to send it back
+            NewLine = lists:reverse([lists:reverse(CurrentValue) | CurrentLine]),
+            UpdatedProcessingFunState =
+                process_new_line(ProcessingFun, NewLine, ProcessingFunState),
+            PState#pstate{
+                state=ready,
+                current_line=[],
+                current_value=[],
+                process_fun_state=UpdatedProcessingFunState
+            };
+        {char, _Char} ->
             PState#pstate{
                 state=skip_to_delimiter,
                 current_line=[lists:reverse(CurrentValue) | CurrentLine],
                 current_value=[]
-            };
-        {char, Char} ->
-            PState#pstate{current_value=[Char | CurrentValue]}
+            }
     end.
 
 do_skip_to_delimiter(

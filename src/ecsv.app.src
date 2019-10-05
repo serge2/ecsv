@@ -1,6 +1,6 @@
 {application, ecsv,
  [
-  {description, ""},
+  {description, "A csv-files parser"},
   {vsn, "1"},
   {registered, []},
   {applications, [

@@ -52,6 +52,7 @@ This parser supports well formed csv files which are
 - a set of lines ending with a `\n`
 - each line contains a set of fields separated with a comma (`,`)
 - each field value can be enclosed with single (`'`) or double quote (`"`)
+- escaped quotes (`""`) are supported in a quoted field
 - each field value can be empty
 - any `\r` is ignored
 

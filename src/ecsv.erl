@@ -7,6 +7,7 @@
 
 -export([process_csv_file_with/2, process_csv_string_with/2]).
 -export([process_csv_file_with/3, process_csv_string_with/3]).
+-export([parse_file/1, parse_string/1]).
 
 %% @doc parse a csv file and process each parsed row with the RowFunction
 process_csv_file_with(IoDevice, RowFunction) ->
@@ -27,6 +28,25 @@ process_csv_file_with(IoDevice, RowFunction, RowFunctionInitState) ->
 process_csv_string_with(String, RowFunction, RowFunctionInitState) ->
     InitState = ecsv_parser:init(RowFunction, RowFunctionInitState),
     stream_from_string(String, InitState).
+
+%% @doc parse a csv file
+-spec parse_file(file:filename()) -> {ok, [[string()]]} | {error, term()}.
+parse_file(Filename) ->
+    case file:read_file(Filename) of
+        {ok, Body} ->
+            parse_string(unicode:characters_to_list(Body));
+        {error, _} = Error ->
+            Error
+    end.
+
+%% @doc parse a csv string
+-spec parse_string(string()) -> {ok, [[string()]]}.
+parse_string(String) ->
+    Fun = fun({newline, NewLine}, Acc) -> [NewLine | Acc];
+             ({eof}, Acc) -> lists:reverse(Acc)
+          end,
+    {ok, Acc} = ecsv:process_csv_string_with(String, Fun, []),
+    {ok, Acc}.
 
 % -----------------------------------------------------------------------------
 
